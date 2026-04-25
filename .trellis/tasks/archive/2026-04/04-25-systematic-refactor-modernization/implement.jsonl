@@ -1,0 +1,10 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Refactor guidance"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Refactor guidance"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Refactor guidance"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Refactor guidance"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Refactor guidance"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Refactor guidance"}
+{"file": ".trellis/tasks/archive/2026-04/00-bootstrap-guidelines/research/dependency-policy.md", "reason": "Refactor guidance"}
+{"file": ".trellis/tasks/04-25-systematic-refactor-modernization/research/dependency-modernization.md", "reason": "Latest stable dependency research"}

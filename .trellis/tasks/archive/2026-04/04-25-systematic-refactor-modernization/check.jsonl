@@ -1,0 +1,10 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".agents/skills/trellis-check/SKILL.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Refactor guidance"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Refactor guidance"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Refactor guidance"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Refactor guidance"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Refactor guidance"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Refactor guidance"}
+{"file": ".trellis/tasks/archive/2026-04/00-bootstrap-guidelines/research/dependency-policy.md", "reason": "Refactor guidance"}
+{"file": ".trellis/tasks/04-25-systematic-refactor-modernization/research/dependency-modernization.md", "reason": "Latest stable dependency research"}
