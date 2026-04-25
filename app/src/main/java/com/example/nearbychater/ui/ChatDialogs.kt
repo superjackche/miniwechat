@@ -79,8 +79,6 @@ private fun MemberProfile.preferredName(fallbackId: MemberId): String {
 }
 
 @Composable
-
-@Composable
 internal fun GroupMembersDialog(
     members: List<MemberProfile>,
     onDismiss: () -> Unit
