@@ -105,7 +105,18 @@ public class NearbyChatService(
                                         json.decodeFromString(MeshEnvelope.serializer(), body)
                                 }
                                         .onSuccess { envelope ->
-                                                // 成功解析
+                                                // Participants are an explicit routing contract. Reject legacy or
+                                                // malformed envelopes rather than flooding unrelated devices.
+                                                val localMemberId = localEndpointInfo?.memberId
+                                                if (envelope.participants.isEmpty() ||
+                                                                localMemberId == null ||
+                                                                localMemberId !in envelope.participants ||
+                                                                envelope.originId !in envelope.participants ||
+                                                                envelope.hopCount < 0 ||
+                                                                envelope.maxHops < 0 ||
+                                                                envelope.hopCount > envelope.maxHops) {
+                                                        return@onSuccess
+                                                }
                                                 // seenPacketIds.add()返回true表示首次看到这个数据包
                                                 if (seenPacketIds.add(envelope.packetId)) {
                                                         externalScope.launch {
@@ -332,12 +343,13 @@ public class NearbyChatService(
         ): Boolean {
                 val payloadString = json.encodeToString(message)
                 val payload = Payload.fromBytes(payloadString.toByteArray(StandardCharsets.UTF_8))
-                val targets =
-                        if (targetMembers.isNullOrEmpty()) {
-                                connectedEndpoints.values.map { it.endpointId }
-                        } else {
-                                targetMembers.mapNotNull { connectedEndpoints[it]?.endpointId }
-                        }
+                // Always route according to the envelope's participant set. An empty
+                // or unknown target set must never degrade into a broadcast to every peer.
+                if (message.participants.isEmpty()) return false
+                val requestedMembers = targetMembers?.toSet() ?: message.participants
+                val targets = requestedMembers
+                        .intersect(message.participants)
+                        .mapNotNull { connectedEndpoints[it]?.endpointId }
                 val finalTargets =
                         if (excludeEndpointId != null) {
                                 targets.filter { it != excludeEndpointId }
@@ -382,8 +394,13 @@ public class NearbyChatService(
         }
 
         private suspend fun forwardEnvelope(envelope: MeshEnvelope, excludeEndpointId: String?) {
-                if (envelope.hopCount >= envelope.maxHops) return
-                broadcast(envelope.conversationId, envelope, excludeEndpointId = excludeEndpointId)
+                if (envelope.participants.isEmpty() || envelope.hopCount >= envelope.maxHops) return
+                broadcast(
+                        envelope.conversationId,
+                        envelope,
+                        targetMembers = envelope.participants,
+                        excludeEndpointId = excludeEndpointId
+                )
         }
 
         public fun events(): SharedFlow<NearbyEvent> = eventFlow

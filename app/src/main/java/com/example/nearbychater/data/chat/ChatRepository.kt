@@ -273,7 +273,8 @@ class ChatRepository(
                                 conversationId = message.conversationId,
                                 message = message.copy(status = MessageStatus.SENT),
                                 originId = localMemberId,
-                                hopCount = 0
+                                hopCount = 0,
+                                participants = (target.memberIds + localMemberId).toSet()
                         )
                 // 实际调用 nearbyChatService 发送消息
                 val success =
