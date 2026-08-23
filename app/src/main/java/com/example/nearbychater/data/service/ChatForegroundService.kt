@@ -10,8 +10,13 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.example.nearbychater.NearbyChaterApplication
 import com.example.nearbychater.MainActivity
 import com.example.nearbychater.R
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 // ChatForegroundService是一个前台服务(Foreground Service)
 // 前台服务 vs 后台服务：
@@ -19,6 +24,7 @@ import com.example.nearbychater.R
 // - 后台服务：不显示通知，容易被系统杀死以节省资源
 // 我们用前台服务确保应用在后台时仍能接收消息
 class ChatForegroundService : Service() {
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // onBind用于绑定服务(Bound Service)
     // 我们这里不需要绑定，直接返回null
@@ -32,20 +38,34 @@ class ChatForegroundService : Service() {
         // startForeground把服务变成前台服务
         // 参数：通知ID，通知对象
         // 调用后会立即显示通知
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // Android 14 (UPSIDE_DOWN_CAKE) 及以上版本需要额外参数
-            startForeground(
-                NOTIFICATION_ID, 
-                createNotification(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, createNotification())
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Android 14 (UPSIDE_DOWN_CAKE) 及以上版本需要额外参数
+                startForeground(
+                    NOTIFICATION_ID,
+                    createNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, createNotification())
+            }
+            (application as NearbyChaterApplication).chatRepository.startNearby()
+        } catch (_: SecurityException) {
+            // Missing notification/foreground-service permission: do not leave a half-started service.
+            stopSelf()
+            return START_NOT_STICKY
         }
 
         // START_STICKY表示服务被杀死后会自动重启
         // 这样可以保证近场通信不会中断
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        (application as? NearbyChaterApplication)?.nearbyChatService?.stop()
+        serviceScope.cancel()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
     }
 
     // 创建通知
