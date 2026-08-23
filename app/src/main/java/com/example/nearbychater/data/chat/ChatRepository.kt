@@ -240,6 +240,7 @@ class ChatRepository(
         val message = snapshot.messages.find { it.id == messageId } ?: return
         val queuedMessage = message.copy(status = MessageStatus.QUEUED)
         outboundQueue.enqueue(queuedMessage)
+        outboundQueue.retryNow(messageId)
         onDb { chatDao.updateMessageStatus(conversationId, messageId, MessageStatus.QUEUED) }
         updateMessageLocally(conversationId, messageId) { it.copy(status = MessageStatus.QUEUED) }
         outboundQueue.triggerFlush()
@@ -254,40 +255,31 @@ class ChatRepository(
         when (val target = resolveConversationTarget(message.conversationId)) {
             ConversationTarget.Unknown -> return
             ConversationTarget.Self -> {
-                onDb {
-                    chatDao.updateMessageStatus(
-                            message.conversationId,
-                            message.id,
-                            MessageStatus.SENT,
-                            shouldRelay = false
-                    )
-                }
-                updateMessageLocally(message.conversationId, message.id) { current ->
-                    current.copy(status = MessageStatus.SENT, shouldRelay = false)
-                }
-                outboundQueue.remove(message.id) // 确保移除消息
+                onDb { chatDao.updateMessageStatus(message.conversationId, message.id, MessageStatus.SENT, shouldRelay = false) }
+                updateMessageLocally(message.conversationId, message.id) { it.copy(status = MessageStatus.SENT, shouldRelay = false) }
+                outboundQueue.remove(message.id)
             }
             is ConversationTarget.Remote -> {
-                val envelope =
-                        MeshEnvelope(
-                                conversationId = message.conversationId,
-                                message = message.copy(status = MessageStatus.SENT),
-                                originId = localMemberId,
-                                hopCount = 0
-                        )
-                // 实际调用 nearbyChatService 发送消息
-                val success =
-                        nearbyChatService.broadcast(
-                                conversationId = message.conversationId,
-                                message = envelope,
-                                targetMembers = target.memberIds
-                        )
-                val nextStatus = if (success) MessageStatus.SENT else MessageStatus.FAILED
-                onDb { chatDao.updateMessageStatus(message.conversationId, message.id, nextStatus) }
-                updateMessageLocally(message.conversationId, message.id) { current ->
-                    current.copy(status = nextStatus)
+                try {
+                    val envelope = MeshEnvelope(message.conversationId, message.copy(status = MessageStatus.SENT), localMemberId, 0)
+                    val success = nearbyChatService.broadcast(message.conversationId, envelope, target.memberIds)
+                    if (success) {
+                        onDb { chatDao.updateMessageStatus(message.conversationId, message.id, MessageStatus.SENT) }
+                        updateMessageLocally(message.conversationId, message.id) { it.copy(status = MessageStatus.SENT) }
+                        outboundQueue.remove(message.id)
+                    } else {
+                        val metadata = outboundQueue.recordFailure(message.id)
+                        val status = MessageStatus.FAILED
+                        onDb { chatDao.updateMessageStatus(message.conversationId, message.id, status) }
+                        updateMessageLocally(message.conversationId, message.id) { it.copy(status = status) }
+                        if (metadata.attempts < 5) outboundQueue.triggerFlush()
+                    }
+                } catch (error: Throwable) {
+                    onDb { chatDao.updateMessageStatus(message.conversationId, message.id, MessageStatus.FAILED) }
+                    updateMessageLocally(message.conversationId, message.id) { it.copy(status = MessageStatus.FAILED) }
+                    trackDiagnostics(DiagnosticsEvent("nearby_protocol_error", "Message could not be encoded", error))
+                    outboundQueue.remove(message.id)
                 }
-                outboundQueue.remove(message.id) // 无论成功与否都移除
             }
         }
     }
