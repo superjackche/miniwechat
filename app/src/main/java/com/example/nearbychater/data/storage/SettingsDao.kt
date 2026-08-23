@@ -2,17 +2,26 @@ package com.example.nearbychater.data.storage
 
 import android.content.ContentValues
 import android.content.Context
+import java.util.UUID
 // 设置项的键名，定义为常量
 // private const表示私有常量，只在这个文件内可见
 // 这样可以避免拼写错误，如果键名改了只需改这里
 private const val KEY_DIAGNOSTICS = "diagnostics_enabled"
 private const val KEY_BACKGROUND_SERVICE = "background_service_enabled"
+private const val KEY_LOCAL_MEMBER_ID = "local_member_id"
 
 // SettingsDao：设置数据访问对象
 // 用于读写应用的各种设置项（诊断模式、后台服务等）
 class SettingsDao(context: Context) {
     // helper用于访问settings表
     private val helper = AppDatabaseHelper(context.applicationContext)
+
+    /** Returns the stable local member id, creating and persisting it on first use. */
+    @Synchronized
+    fun localMemberId(): String {
+        getValue(KEY_LOCAL_MEMBER_ID)?.takeIf { it.isNotBlank() }?.let { return it }
+        return UUID.randomUUID().toString().also { setValue(KEY_LOCAL_MEMBER_ID, it) }
+    }
 
     // 读取诊断功能是否启用
     // defaultValue参数指定如果数据库中没有这个设置时返回什么值

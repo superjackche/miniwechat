@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -11,12 +13,31 @@ android {
 
     defaultConfig {
         applicationId = "com.example.nearbychater"
-        minSdk = 36
+        // Nearby Connections and the legacy Bluetooth/location permission model
+        // support Android 6.0 (API 23). Keep runtime guards for newer APIs below.
+        minSdk = 23
         targetSdk = 36
         versionCode = 2
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Release signing is supplied by CI through a temporary keystore.properties file.
+    // Local and pull-request builds continue to use the default debug signing key.
+    val signingProperties = Properties().apply {
+        val propertiesFile = rootProject.file("keystore.properties")
+        if (propertiesFile.exists()) propertiesFile.inputStream().use(::load)
+    }
+    if (signingProperties.isNotEmpty()) {
+        signingConfigs {
+            create("ciRelease") {
+                storeFile = rootProject.file(signingProperties.getProperty("storeFile"))
+                storePassword = signingProperties.getProperty("storePassword")
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -27,7 +48,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 对于开源项目，使用默认的调试签名就足够了
+            if (signingProperties.isNotEmpty()) signingConfig = signingConfigs.getByName("ciRelease")
         }
         debug {
             applicationIdSuffix = ".debug"
@@ -53,6 +74,20 @@ android {
         }
     }
 }
+
+// Keep a device/Gradle compatibility check in the normal verification graph.
+// The app must remain installable on at least one API level below compileSdk.
+tasks.register("checkApiCompatibility") {
+    group = "verification"
+    description = "Verifies that the configured minimum API remains below API 36."
+    doLast {
+        val configuredMinSdk = android.defaultConfig.minSdk ?: error("minSdk is not configured")
+        check(configuredMinSdk < 36) {
+            "minSdk must stay below API 36 so older supported devices remain installable"
+        }
+    }
+}
+tasks.named("check") { dependsOn("checkApiCompatibility") }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
