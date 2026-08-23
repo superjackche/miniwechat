@@ -63,6 +63,10 @@ public class NearbyChatService(
         // 存储当前直接连接的所有设备
         private val connectedEndpoints = ConcurrentHashMap<MemberId, EndpointMetadata>()
 
+        // Endpoint IDs currently awaiting a connection result. A concurrent set makes
+        // discovery callbacks idempotent even when Nearby invokes them concurrently.
+        private val pendingConnectionEndpoints = PendingConnectionEndpoints()
+
         // pendingRemoteInfo: 待处理的远程信息
         // 连接成功前用于临时存储对方的信息
         private val pendingRemoteInfo = ConcurrentHashMap<String, EndpointInfo?>()
@@ -186,6 +190,7 @@ public class NearbyChatService(
                                 endpointId: String,
                                 result: ConnectionResolution
                         ) {
+                                pendingConnectionEndpoints.remove(endpointId)
                                 when (result.status.statusCode) {
                                         ConnectionsStatusCodes.STATUS_OK -> {
                                                 val remoteInfo =
@@ -228,6 +233,7 @@ public class NearbyChatService(
                         }
 
                         override fun onDisconnected(endpointId: String) {
+                                pendingConnectionEndpoints.remove(endpointId)
                                 connectedEndpoints.values
                                         .firstOrNull { it.endpointId == endpointId }
                                         ?.let { profile ->
@@ -249,6 +255,10 @@ public class NearbyChatService(
                                 endpointId: String,
                                 info: DiscoveredEndpointInfo
                         ) {
+                                if (connectedEndpoints.values.any { it.endpointId == endpointId } ||
+                                                !pendingConnectionEndpoints.tryAdd(endpointId)) {
+                                        return
+                                }
                                 val endpointName =
                                         localEndpointInfo?.let { formatEndpointPayload(it) }
                                                 ?: defaultEndpointName()
@@ -258,6 +268,7 @@ public class NearbyChatService(
                                                 connectionLifecycleCallback
                                         )
                                         .addOnFailureListener { throwable ->
+                                                pendingConnectionEndpoints.remove(endpointId)
                                                 externalScope.launch {
                                                         eventFlow.emit(
                                                                 NearbyEvent.Error(
@@ -275,6 +286,7 @@ public class NearbyChatService(
                         }
 
                         override fun onEndpointLost(endpointId: String) {
+                                pendingConnectionEndpoints.remove(endpointId)
                                 connectedEndpoints.values
                                         .firstOrNull { it.endpointId == endpointId }
                                         ?.let { profile ->
@@ -319,6 +331,7 @@ public class NearbyChatService(
                 connectionsClient.stopDiscovery()
                 connectionsClient.stopAllEndpoints()
                 connectedEndpoints.clear()
+                pendingConnectionEndpoints.clear()
         }
 
         // hasConnectedEndpoints: 检查是否有连接的设备
@@ -483,3 +496,20 @@ private data class EndpointMetadata(
         val endpointId: String,
         val nickname: String?
 )
+
+/** Thread-safe lifecycle state for endpoint connection requests. */
+internal class PendingConnectionEndpoints {
+        private val endpointIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+        fun tryAdd(endpointId: String): Boolean = endpointIds.add(endpointId)
+
+        fun remove(endpointId: String) {
+                endpointIds.remove(endpointId)
+        }
+
+        fun clear() {
+                endpointIds.clear()
+        }
+
+        fun contains(endpointId: String): Boolean = endpointIds.contains(endpointId)
+}
