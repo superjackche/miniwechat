@@ -19,6 +19,25 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Release signing is supplied by CI (or local environment variables) so
+    // credentials never need to be committed to the repository.
+    val releaseKeystore = providers.environmentVariable("RELEASE_KEYSTORE_PATH")
+    val releaseStorePassword = providers.environmentVariable("RELEASE_STORE_PASSWORD")
+    val releaseKeyAlias = providers.environmentVariable("RELEASE_KEY_ALIAS")
+    val releaseKeyPassword = providers.environmentVariable("RELEASE_KEY_PASSWORD")
+    signingConfigs {
+        if (releaseKeystore.isPresent && releaseStorePassword.isPresent &&
+            releaseKeyAlias.isPresent && releaseKeyPassword.isPresent
+        ) {
+            create("ciRelease") {
+                storeFile = file(releaseKeystore.get())
+                storePassword = releaseStorePassword.get()
+                keyAlias = releaseKeyAlias.get()
+                keyPassword = releaseKeyPassword.get()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -27,7 +46,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 对于开源项目，使用默认的调试签名就足够了
+            if (signingConfigs.findByName("ciRelease") != null) {
+                signingConfig = signingConfigs.getByName("ciRelease")
+            }
         }
         debug {
             applicationIdSuffix = ".debug"
