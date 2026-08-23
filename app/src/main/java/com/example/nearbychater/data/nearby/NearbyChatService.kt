@@ -21,6 +21,7 @@ import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
 import java.nio.charset.StandardCharsets
+import android.util.Base64
 import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -28,8 +29,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.Serializable
 
 // SERVICE_ID: Nearby Connections服务标识符
 // 相同的SERVICE_ID的设备才能相互发现和连接
@@ -178,7 +181,7 @@ public class NearbyChatService(
                                 connectionInfo: ConnectionInfo
                         ) {
                                 pendingRemoteInfo[endpointId] =
-                                        parseEndpointPayload(connectionInfo.endpointName)
+                                        parseEndpointPayload(connectionInfo.endpointName, endpointId)
                                 connectionsClient.acceptConnection(endpointId, payloadCallback)
                         }
 
@@ -447,16 +450,33 @@ public class NearbyChatService(
                 )
 
         private fun formatEndpointPayload(info: EndpointInfo): String =
-                "${info.memberId}|${info.nickname}"
+                runCatching {
+                                val payload = EndpointPayload(
+                                                memberId = info.memberId.take(MAX_MEMBER_ID_LENGTH),
+                                                nickname = info.nickname.take(MAX_NICKNAME_LENGTH)
+                                )
+                                Base64.encodeToString(
+                                                json.encodeToString(payload).toByteArray(StandardCharsets.UTF_8),
+                                                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+                                ).take(MAX_ENDPOINT_PAYLOAD_LENGTH)
+                        }
+                        .getOrDefault("")
 
-        private fun parseEndpointPayload(raw: String?): EndpointInfo? {
-                if (raw.isNullOrBlank()) return null
-                val parts = raw.split("|", limit = 2)
-                return if (parts.size == 2) {
-                        EndpointInfo(memberId = parts[0], nickname = parts[1])
-                } else {
-                        EndpointInfo(memberId = raw, nickname = raw)
-                }
+        private fun parseEndpointPayload(raw: String?, fallbackEndpointId: String): EndpointInfo {
+                val fallback = EndpointInfo(
+                                memberId = fallbackEndpointId.take(MAX_MEMBER_ID_LENGTH),
+                                nickname = fallbackEndpointId.take(MAX_NICKNAME_LENGTH)
+                        )
+                if (raw.isNullOrBlank() || raw.length > MAX_ENDPOINT_PAYLOAD_LENGTH) return fallback
+                return runCatching {
+                                val decoded = Base64.decode(raw, Base64.URL_SAFE or Base64.NO_WRAP)
+                                val payload = json.decodeFromString<EndpointPayload>(
+                                                decoded.toString(StandardCharsets.UTF_8)
+                                        )
+                                require(payload.memberId.isNotBlank() && payload.memberId.length <= MAX_MEMBER_ID_LENGTH)
+                                require(payload.nickname.length <= MAX_NICKNAME_LENGTH)
+                                EndpointInfo(payload.memberId, payload.nickname)
+                        }.getOrDefault(fallback)
         }
 
         private fun buildAdvertisingOptions(): AdvertisingOptions =
@@ -465,6 +485,13 @@ public class NearbyChatService(
         private fun buildDiscoveryOptions(): DiscoveryOptions =
                 DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
 }
+
+private const val MAX_MEMBER_ID_LENGTH = 128
+private const val MAX_NICKNAME_LENGTH = 128
+private const val MAX_ENDPOINT_PAYLOAD_LENGTH = 512
+
+@Serializable
+private data class EndpointPayload(val memberId: String, val nickname: String)
 
 public sealed interface NearbyEvent {
         public data class MemberOnline(val memberId: MemberId, val nickname: String?) : NearbyEvent
