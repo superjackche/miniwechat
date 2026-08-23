@@ -2,7 +2,6 @@ package com.example.nearbychater.data.chat
 
 import android.content.Context
 import android.os.Build
-import android.provider.Settings
 import com.example.nearbychater.core.logging.LogManager
 import com.example.nearbychater.core.model.Attachment
 import com.example.nearbychater.core.model.ChatMessage
@@ -19,7 +18,7 @@ import com.example.nearbychater.data.nearby.EndpointInfo
 import com.example.nearbychater.data.nearby.NearbyChatService
 import com.example.nearbychater.data.nearby.NearbyEvent
 import com.example.nearbychater.data.storage.ChatDao
-import java.util.UUID
+import com.example.nearbychater.data.storage.SettingsDao
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,8 +44,9 @@ class ChatRepository(
         private val chatDao: ChatDao = ChatDao(context),
         private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
-    // 本机设备ID，根据ANDROID_ID生成，唯一标识这台设备
-    private val localMemberId: MemberId = deviceId(context)
+    // 本机设备ID由settings持久化，重启及Android ID不可用时保持稳定
+    private val settingsDao = SettingsDao(context)
+    private val localMemberId: MemberId = deviceId()
     private val conversationIdentity = ConversationIdentity(localMemberId)
     private val summaryBuilder = ConversationSummaryBuilder(localMemberId, conversationIdentity)
     private val outboundQueue = OutboundMessageQueue()
@@ -515,11 +515,7 @@ class ChatRepository(
 
     private suspend fun <T> onDb(block: () -> T): T = withContext(ioDispatcher) { block() }
 
-    private fun deviceId(context: Context): MemberId {
-        val androidId =
-                Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        return androidId ?: UUID.randomUUID().toString()
-    }
+    private fun deviceId(): MemberId = settingsDao.localMemberId()
 
     private fun resolveConversationKey(memberIds: Set<MemberId>): String =
             conversationIdentity.conversationKey(memberIds)
