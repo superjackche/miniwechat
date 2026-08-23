@@ -114,14 +114,14 @@ class ChatRepository(
         }
         // 开始监听Nearby服务的事件（成员上线/下线、消息接收等）
         observeNearbyEvents()
-        // 启动Nearby服务，开始广播自己并发现附近设备
-        // EndpointInfo包含自己的设备ID和昵称（设备型号）
-        nearbyChatService.start(
-                EndpointInfo(memberId = localMemberId, nickname = BuildNickname.local())
-        )
         // 启动消息刷新循环
         // 这个协程会一直运行，等待flushTrigger的信号
         flushJob = externalScope.launch { outboundQueue.runFlushLoop { flushQueuedMessages() } }
+    }
+
+    /** Starts Nearby advertising and discovery. Owned by ChatForegroundService. */
+    fun startNearby() {
+        nearbyChatService.start(EndpointInfo(memberId = localMemberId, nickname = BuildNickname.local()))
     }
 
     // 获取指定会话的消息列表
