@@ -34,8 +34,22 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
       
-    - name: Build with Gradle
-      run: ./gradlew build
+    - name: Unit tests
+      run: ./gradlew testDebugUnitTest
+
+    - name: Lint
+      run: ./gradlew lintDebug
+
+    - name: Assemble debug APK
+      run: ./gradlew assembleDebug
+
+    - name: Run instrumentation tests on emulator
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 35
+        arch: x86_64
+        profile: Pixel 2
+        script: ./gradlew connectedDebugAndroidTest
       
     - name: Build Release APK
       run: ./gradlew assembleRelease
@@ -45,3 +59,14 @@ jobs:
       with:
         name: app-release
         path: app/build/outputs/apk/release/app-release-unsigned.apk
+
+    - name: Upload test results and reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-test-results
+        if-no-files-found: warn
+        path: |
+          app/build/test-results/**
+          app/build/reports/**
+          app/build/outputs/androidTest-results/**
