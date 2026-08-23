@@ -314,11 +314,17 @@ public class NearbyChatService(
         // stop: 停止Nearby服务
         // 停止广播、发现、断开所有连接
         public fun stop() {
+                // Snapshot members before disconnecting and clearing endpoint state so each
+                // currently connected member receives an offline event.
+                val connectedMemberIds = connectedEndpoints.keys.toList()
                 isRunning = false
                 connectionsClient.stopAdvertising()
                 connectionsClient.stopDiscovery()
                 connectionsClient.stopAllEndpoints()
                 connectedEndpoints.clear()
+                connectedMemberIds.forEach { memberId ->
+                        externalScope.launch { eventFlow.emit(NearbyEvent.MemberOffline(memberId)) }
+                }
         }
 
         // hasConnectedEndpoints: 检查是否有连接的设备

@@ -359,9 +359,14 @@ class ChatRepository(
     }
 
     private suspend fun handleMemberOffline(memberId: MemberId) {
-        val profile = _members.value[memberId] ?: return
-        val updated = profile.copy(isOnline = false, lastSeenAt = System.currentTimeMillis())
-        onDb { chatDao.updateMemberOnlineState(memberId, null, false, updated.lastSeenAt) }
+        val now = System.currentTimeMillis()
+        val profile = _members.value[memberId]
+        val updated = (profile ?: MemberProfile(memberId = memberId)).copy(
+            isOnline = false,
+            lastSeenAt = now
+        )
+        // Persist the transition even when the in-memory profile was not loaded yet.
+        onDb { chatDao.updateMemberOnlineState(memberId, null, false, now) }
         upsertMemberLocally(updated)
     }
 
