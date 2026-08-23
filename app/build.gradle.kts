@@ -11,7 +11,9 @@ android {
 
     defaultConfig {
         applicationId = "com.example.nearbychater"
-        minSdk = 36
+        // Nearby Connections and the legacy Bluetooth/location permission model
+        // support Android 6.0 (API 23). Keep runtime guards for newer APIs below.
+        minSdk = 23
         targetSdk = 36
         versionCode = 2
         versionName = "1.0.0"
@@ -53,6 +55,20 @@ android {
         }
     }
 }
+
+// Keep a device/Gradle compatibility check in the normal verification graph.
+// The app must remain installable on at least one API level below compileSdk.
+tasks.register("checkApiCompatibility") {
+    group = "verification"
+    description = "Verifies that the configured minimum API remains below API 36."
+    doLast {
+        val configuredMinSdk = android.defaultConfig.minSdk ?: error("minSdk is not configured")
+        check(configuredMinSdk < 36) {
+            "minSdk must stay below API 36 so older supported devices remain installable"
+        }
+    }
+}
+tasks.named("check") { dependsOn("checkApiCompatibility") }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
