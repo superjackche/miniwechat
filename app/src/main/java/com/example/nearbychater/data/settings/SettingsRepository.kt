@@ -90,6 +90,9 @@ class SettingsRepository(
         }
     }
 
+    /** Returns the persisted local member id, creating it only during first initialization. */
+    suspend fun localMemberId(): String = withContext(ioDispatcher) { settingsDao.localMemberId() }
+
     // 设置会话别名
     suspend fun setConversationAlias(conversationId: ConversationId, title: String) {
         withContext(ioDispatcher) {
