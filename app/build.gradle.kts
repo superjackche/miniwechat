@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -19,6 +21,23 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Release signing is supplied by CI through a temporary keystore.properties file.
+    // Local and pull-request builds continue to use the default debug signing key.
+    val signingProperties = Properties().apply {
+        val propertiesFile = rootProject.file("keystore.properties")
+        if (propertiesFile.exists()) propertiesFile.inputStream().use(::load)
+    }
+    if (signingProperties.isNotEmpty()) {
+        signingConfigs {
+            create("ciRelease") {
+                storeFile = rootProject.file(signingProperties.getProperty("storeFile"))
+                storePassword = signingProperties.getProperty("storePassword")
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -27,7 +46,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 对于开源项目，使用默认的调试签名就足够了
+            if (signingProperties.isNotEmpty()) signingConfig = signingConfigs.getByName("ciRelease")
         }
         debug {
             applicationIdSuffix = ".debug"
