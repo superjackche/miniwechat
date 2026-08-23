@@ -34,14 +34,31 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
       
+    - name: Create CI release keystore
+      run: |
+        keytool -genkeypair -v -keystore "$RUNNER_TEMP/release.keystore" \
+          -storepass changeit -keypass changeit -alias nearbychater-release \
+          -keyalg RSA -keysize 2048 -validity 10000 \
+          -dname "CN=NearbyChater CI, OU=Build, O=NearbyChater, L=NA, ST=NA, C=US"
+
     - name: Build with Gradle
+      env:
+        RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+        RELEASE_STORE_PASSWORD: changeit
+        RELEASE_KEY_ALIAS: nearbychater-release
+        RELEASE_KEY_PASSWORD: changeit
       run: ./gradlew build
       
     - name: Build Release APK
+      env:
+        RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+        RELEASE_STORE_PASSWORD: changeit
+        RELEASE_KEY_ALIAS: nearbychater-release
+        RELEASE_KEY_PASSWORD: changeit
       run: ./gradlew assembleRelease
       
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: app-release
-        path: app/build/outputs/apk/release/app-release-unsigned.apk
+        path: app/build/outputs/apk/release/app-release.apk
