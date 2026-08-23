@@ -28,7 +28,6 @@ class ChatUiInstrumentedTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
-    /*
     @Test
     fun longPressChatBubbleShowsCancel() {
         var cancelTriggered = false
@@ -38,9 +37,6 @@ class ChatUiInstrumentedTest {
             content = "Hello",
             status = MessageStatus.QUEUED
         )
-        // Temporarily disabled due to ChatViewModel dependency complexity
-        // TODO: Implement proper mock for ChatViewModel in instrumented tests
-        /*
         composeRule.setContent {
             NearbyChaterTheme {
                 ChatBubble(
@@ -49,7 +45,7 @@ class ChatUiInstrumentedTest {
                     profile = MemberProfile(memberId = "self", localNickname = "Self"),
                     onCancel = { cancelTriggered = true },
                     onAttachmentClick = {},
-                    viewModel = // Mock needed here
+                    onRetry = {}
                 )
             }
         }
@@ -57,9 +53,7 @@ class ChatUiInstrumentedTest {
         composeRule.onNodeWithText("Cancel send").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel send").performClick()
         assertTrue(cancelTriggered)
-        */
     }
-    */
 
     @Test
     fun diagnosticsBubbleDisplaysAndDismisses() {
